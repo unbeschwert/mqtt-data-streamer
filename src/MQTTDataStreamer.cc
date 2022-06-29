@@ -1,68 +1,83 @@
-#include "HelperClasses.hh"
 #include "MQTTDataStreamer.hh"
+#include "HelperClasses.hh"
 
-MQTTDataStreamer::MQTTDataStreamer(std::string addr_, std::string client_id_,
-                                     std::string topic_, uint8_t QoS_,
-                                     bool retain_msg_,
-                                     std::chrono::seconds timeout_)
-    : addr(addr_), client_id(client_id_), topic(topic_), QoS(QoS_),
-      retain_msg(retain_msg_), timeout(timeout_) {
-  mqtt_async_client = std::make_unique<mqtt::async_client>(addr, client_id);
+MQTTDataStreamer::MQTTDataStreamer(
+        MqttAsyncTuple mqtt_async_tuple_,
+        std::chrono::milliseconds timeout_) : 
+    mqtt_async_tuple(mqtt_async_tuple_), timeout(timeout_) {
 
-  MqttCallback cb;
-  mqtt_async_client->set_callback(cb);
+    auto [mqtt_async_client, callback] = mqtt_async_tuple;    
 
-  mqtt::connect_options connection_options = buildConnectOptions();
-  try {
-    std::cout << "Connecting ... ";
-    mqtt_async_client->connect(connection_options)->wait();
-    std::cout << "OK!\n";
-  } catch (const mqtt::exception &exc) {
-    std::cerr << exc.what() << "\n";
-  }
+    mqtt_async_client->set_callback(*callback);    
+    mqtt::connect_options connection_options = buildConnectOptions();
+
+    try {
+        std::cout << "Connecting ... ";
+        mqtt_async_client->connect(connection_options)->wait();
+        std::cout << "OK!\n";
+    }
+    catch(const mqtt::exception& exc) {
+        std::cerr << exc.what() << "\n";
+    }
 }
 
 MQTTDataStreamer::~MQTTDataStreamer() {
-  try {
-    std::cout << "Disconnecting ... ";
-    mqtt_async_client->disconnect()->wait();
-    std::cout << "OK!\n";
-  } catch (const mqtt::exception &exc) {
-    std::cerr << exc.what() << "\n";
-  }
+    try {
+        std::cout << "Disconnecting ... ";
+        std::get<0>(mqtt_async_tuple)->disconnect()->wait();
+        std::cout << "OK!\n";
+    }
+    catch(const mqtt::exception& exc) {
+        std::cerr << exc.what() << "\n";
+    }
 }
 
 mqtt::connect_options MQTTDataStreamer::buildConnectOptions() {
-  mqtt::connect_options opt;
-  opt.set_clean_session(true);
-  opt.set_keep_alive_interval(std::chrono::seconds(10));
-  std::string lwt_payload = "SOMETHING_WENT_WRONG";
-  opt.set_will(mqtt::message(topic, lwt_payload, QoS, false));
-  return (opt);
+    mqtt::connect_options opt;
+    opt.set_clean_session(true);
+    opt.set_keep_alive_interval(std::chrono::seconds(10));
+    std::string lwt_payload = "SOMETHING_WENT_WRONG";
+    opt.set_will(mqtt::message("/demonstrator_04/distress", 
+                        lwt_payload, 1, false));
+    return(opt);
 }
 
-mqtt::message_ptr MQTTDataStreamer::createMessage(const unsigned char *payload,
-                                                   std::size_t len) {
-  mqtt::message_ptr msg = mqtt::make_message(
-      topic, reinterpret_cast<const void *>(payload), len, QoS, retain_msg);
-  return (msg);
+mqtt::message_ptr MQTTDataStreamer::createMessage(
+        const void* payload,
+        std::size_t len,
+        const std::string& topic,
+        uint8_t QoS,
+        bool retain_msg) {
+    std::cout << "Creating MQTT message ... ";
+    mqtt::message_ptr msg = mqtt::make_message(topic, 
+            payload, len, QoS, retain_msg);
+    std::cout << "Finished!\n";
+    return(msg);
 }
 
-void MQTTDataStreamer::publishMessage(const unsigned char *payload,
-                                       std::size_t len,
-                                       DeliveryActionListener listener) {
-  mqtt::message_ptr msg = createMessage(payload, len);
-  // I am not using PERSISTANCE property of MQTT. This can be added
-  // if there need be.
-  try {
-    std::cout << "Sending Image ... ";
-    mqtt::delivery_token_ptr publish_tok =
-        mqtt_async_client->publish(msg, nullptr, listener);
-    while (!listener.isDone())
-      std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    std::cout << "OK!\n";
+void MQTTDataStreamer::publishMessage(
+        const void* payload,
+        std::size_t len,
+        std::string topic,
+        uint8_t QoS,
+        std::mutex* mut,
+        const std::string& debug_info) {
+    const std::lock_guard<std::mutex> lock(*mut);
 
-  } catch (const mqtt::exception &exc) {
-    std::cerr << exc.what() << "\n";
-  }
+    mqtt::message_ptr msg = createMessage(payload, len, topic, QoS);
+    ActionListener listener("publish");
+    
+    // I am not using PERSISTANCE property of MQTT. This can be added 
+    // if there need be.
+    try {
+        std::cout << "\t" << debug_info << "\n";
+        mqtt::delivery_token_ptr publish_tok = std::get<0>(mqtt_async_tuple)->publish(
+                msg, nullptr, listener);
+        while(not listener.isDone())
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        std::cout << "\tOK!\n";
+    }
+    catch(const mqtt::exception& exc) {
+        std::cerr << exc.what() << "\n";
+    }
 }

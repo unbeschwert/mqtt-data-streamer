@@ -1,60 +1,92 @@
-#ifndef HelperClasses_HH
-#define HelperClasses_HH
+#ifndef HelperClass_HH
+#define HelperClass_HH
 
-#include "mqtt/async_client.h"
 #include <atomic>
-#include <iostream>
 #include <string>
+#include <iostream>
+#include "mqtt/async_client.h"
 
-class MqttCallback : public virtual mqtt::callback {
+class TopicsToHandle {
 public:
-  void connection_lost(const std::string &cause) override {
-    std::cout << "\nConnection lost ... \n";
-    if (!cause.empty())
-      std::cout << "cause : " << cause << "\n";
-  }
-  void delivery_complete(mqtt::delivery_token_ptr tok) override {
-    std::cout << "\tDelivery complete for token: "
-              << (tok ? tok->get_message_id() : -1) << "\n";
-  }
+    std::atomic<bool> message_received = false;
+    std::string name;
+    uint8_t QoS;
+    
+    TopicsToHandle(const std::string& name_,
+            uint8_t QoS_) : name(name_), QoS(QoS_) {}
+    virtual void processMessage() = 0;
 };
-
-/////////////////////////////////////////////////////////////////////////////
 
 /**
  * A base action listener.
  */
 class ActionListener : public virtual mqtt::iaction_listener {
-protected:
-  void on_failure(const mqtt::token &tok) override {
-    std::cout << "\tListener failure for token: " << tok.get_message_id()
-              << "\n";
-  }
-  void on_success(const mqtt::token &tok) override {
-    std::cout << "\tListener success for token: " << tok.get_message_id()
-              << "\n";
-  }
-};
+    std::string name;
+    std::atomic<bool> done;
 
-/////////////////////////////////////////////////////////////////////////////
-
-/**
- * A derived action listener for publish events.
- */
-class DeliveryActionListener : public ActionListener {
-  std::atomic<bool> done;
-  void on_failure(const mqtt::token &tok) override {
-    ActionListener::on_failure(tok);
-    done = true;
-  }
-  void on_success(const mqtt::token &tok) override {
-    ActionListener::on_success(tok);
-    done = true;
-  }
+	void on_failure(const mqtt::token& tok) override {
+        auto topics = tok.get_topics();
+        if(topics && !topics->empty())
+            std::cout << "\t" << name << " failure for " << 
+                (*topics)[0] << '\n';
+        done = true;
+	}
+	void on_success(const mqtt::token& tok) override {
+        auto topics = tok.get_topics();
+        if(topics && !topics->empty())
+            std::cout << "\t" << name << " success for " << 
+                (*topics)[0] << '\n';
+        done = true;
+	}
 
 public:
-  DeliveryActionListener() : done(false) {}
-  bool isDone() const { return done; }
+    ActionListener(const std::string& name_) :
+        name(name_), done(false) {}
+    bool isDone() const { return done; };
+};
+
+
+class MqttCallback : public virtual mqtt::callback {
+    std::shared_ptr<mqtt::async_client> mqtt_async_client;
+    std::vector<std::shared_ptr<TopicsToHandle>> topics_to_handle;
+
+    ActionListener listener{"subscribe"};
+
+    void connected(const std::string& cause) override {
+        std::cout << "\tConnected!\n";
+        for(const auto& topic : topics_to_handle) {
+            std::cout << "\t\tSubscribing to '" << 
+                topic->name << "' using QoS '" << topic->QoS << "'\n";
+            mqtt_async_client->subscribe(topic->name, 
+                    topic->QoS, nullptr, listener);
+        }
+        std::cout << "\tSubscription complete!\n";
+    }
+	void connection_lost(const std::string& cause) override {
+		std::cout << "\tConnection lost ... ";
+		if (!cause.empty())
+			std::cout << cause << "\n";
+        else
+            std::cout << "no cause found!\n";
+	}
+    void message_arrived(mqtt::const_message_ptr msg) override {
+        std::cout << "\tMessage arrived on " << 
+            msg->get_topic() << "\n";
+        for(const auto& topic : topics_to_handle) {
+            if(topic->name == msg->get_topic())
+                topic->processMessage();
+        }
+    }
+	void delivery_complete(mqtt::delivery_token_ptr tok) override {
+        auto message = tok->get_message();
+        std::cout << "\tDelivery on " << message->get_topic() << " complete!\n";
+	}
+
+public:
+    MqttCallback(std::shared_ptr<mqtt::async_client> mqtt_async_client_,
+            const std::vector<std::shared_ptr<TopicsToHandle>>& topics_to_handle_) :
+        mqtt_async_client(mqtt_async_client_), 
+        topics_to_handle(topics_to_handle_) {}
 };
 
 #endif

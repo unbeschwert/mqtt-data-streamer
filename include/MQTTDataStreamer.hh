@@ -1,36 +1,66 @@
 #ifndef MQTTDataStreamer_HH
 #define MQTTDataStreamer_HH
 
-#include <chrono>
-#include <cstdint>
 #include <string>
+#include <mutex>
+#include <cstdint>
+#include <chrono>
+#include <tuple>
 
-#include "HelperClasses.hh"
 #include "mqtt/async_client.h"
+#include "HelperClasses.hh"
+
+/*
+ * This is much simpler way of combining client and 
+ * its corresponding callback. Refer to HelperClasses.hh
+ * to learn more about Callback class.
+ */
+using MqttAsyncTuple = std::tuple<mqtt::async_client_ptr,
+      mqtt::callback_ptr>;
 
 class MQTTDataStreamer {
-  std::string addr;      // server Universal Resource Indicator(URI)
-  std::string client_id; // unique ID for the client
-  std::string topic; // string representing the MQTT topic over which the images
-                     // are sent
-  uint8_t QoS; // Quality of Service parameter. It can take values 0, 1 and 2
-  bool retain_msg; // checks if the message should be retained.
-  std::chrono::seconds timeout;
-  std::unique_ptr<mqtt::async_client> mqtt_async_client;
-  mqtt::message_ptr createMessage(const unsigned char *payload,
-                                  std::size_t len);
-  mqtt::connect_options buildConnectOptions();
+    /*
+     * This classes acts as an wrapper for the mqtt_async_client 
+     * class provided by the paho.mqtt.cpp library. It is meant
+     * to make usage of paho.mqtt.cpp library easier. I(Nirmal) dunno
+     * if that goal has been acheived though.
+     */
+    MqttAsyncTuple mqtt_async_tuple;
+    std::chrono::milliseconds timeout;
 
-public:
-  MQTTDataStreamer() = delete;
-  MQTTDataStreamer(std::string addr_, std::string client_id_,
-                    std::string topic_, uint8_t QoS_ = 2,
-                    bool retain_msg_ = false,
-                    std::chrono::seconds timeout_ = std::chrono::seconds(10));
-  ~MQTTDataStreamer();
-  void
-  publishMessage(const unsigned char *payload, std::size_t len,
-                 DeliveryActionListener listener = DeliveryActionListener());
+    /*
+     * All the meaning in the following functions 
+     * have a predefinied meaning that are borrowed directly
+     * from the paho.mqtt.cpp library. Besides the name of the
+     * variables are pretty descriptive enough
+     */
+    mqtt::message_ptr createMessage(const void* payload, 
+            std::size_t len, const std::string& topic, 
+            uint8_t QoS, bool retain_msg = false);
+    mqtt::connect_options buildConnectOptions();
+
+    public:
+    MQTTDataStreamer() = delete;
+    // the default value of timeout is chosen from experiments
+    // DO NOT TRUST IT.
+    MQTTDataStreamer(
+        MqttAsyncTuple mqtt_async_tuple_,
+        std::chrono::milliseconds timeout_ = std::chrono::milliseconds(500));
+    ~MQTTDataStreamer();
+
+    /*
+     * The mutex here is used to make sure that 
+     * this function is thread-safe. Refer to test.cc 
+     * in OpenCVImageSender project to learn more about why
+     * this might be needed.
+     */
+    void publishMessage(
+            const void* payload,
+            std::size_t len,
+            std::string topic,
+            uint8_t QoS,
+            std::mutex* mut, 
+            const std::string& debug_info);
 };
 
 #endif
