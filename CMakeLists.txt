@@ -24,11 +24,11 @@ find_package(PahoMqttCpp COMPONENTS PahoMqttC REQUIRED)
 
 set(PahoMqttCpp_LIBS PahoMqttCpp::paho-mqttpp3)
 
-add_library(${LIBRARY_NAME} SHARED src/MQTTKameraStreamer.cc)
+add_library(${LIBRARY_NAME} SHARED src/MQTTDataStreamer.cc)
 set_target_properties(${LIBRARY_NAME} 
     PROPERTIES 
         SOVERSION 1 
-        PUBLIC_HEADER "include/MQTTKameraStreamer.hh;include/HelperClasses.hh")
+        PUBLIC_HEADER "include/MQTTDataStreamer.hh;include/HelperClasses.hh")
 
 target_link_libraries(${LIBRARY_NAME} ${PahoMqttCpp_LIBS})
 

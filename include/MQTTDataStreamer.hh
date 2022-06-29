@@ -22,12 +22,12 @@ class MQTTDataStreamer {
   mqtt::connect_options buildConnectOptions();
 
 public:
-  MQTTDatatStreamer() = delete;
-  MQTTDatatStreamer(std::string addr_, std::string client_id_,
+  MQTTDataStreamer() = delete;
+  MQTTDataStreamer(std::string addr_, std::string client_id_,
                     std::string topic_, uint8_t QoS_ = 2,
                     bool retain_msg_ = false,
                     std::chrono::seconds timeout_ = std::chrono::seconds(10));
-  ~MQTTDatatStreamer();
+  ~MQTTDataStreamer();
   void
   publishMessage(const unsigned char *payload, std::size_t len,
                  DeliveryActionListener listener = DeliveryActionListener());

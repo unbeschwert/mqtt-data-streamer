@@ -1,7 +1,7 @@
 #include "HelperClasses.hh"
-#include "MQTTDatatStreamer.hh"
+#include "MQTTDataStreamer.hh"
 
-MQTTDatatStreamer::MQTTDatatStreamer(std::string addr_, std::string client_id_,
+MQTTDataStreamer::MQTTDataStreamer(std::string addr_, std::string client_id_,
                                      std::string topic_, uint8_t QoS_,
                                      bool retain_msg_,
                                      std::chrono::seconds timeout_)
@@ -22,7 +22,7 @@ MQTTDatatStreamer::MQTTDatatStreamer(std::string addr_, std::string client_id_,
   }
 }
 
-MQTTDatatStreamer::~MQTTDatatStreamer() {
+MQTTDataStreamer::~MQTTDataStreamer() {
   try {
     std::cout << "Disconnecting ... ";
     mqtt_async_client->disconnect()->wait();
@@ -32,7 +32,7 @@ MQTTDatatStreamer::~MQTTDatatStreamer() {
   }
 }
 
-mqtt::connect_options MQTTDatatStreamer::buildConnectOptions() {
+mqtt::connect_options MQTTDataStreamer::buildConnectOptions() {
   mqtt::connect_options opt;
   opt.set_clean_session(true);
   opt.set_keep_alive_interval(std::chrono::seconds(10));
@@ -41,14 +41,14 @@ mqtt::connect_options MQTTDatatStreamer::buildConnectOptions() {
   return (opt);
 }
 
-mqtt::message_ptr MQTTDatatStreamer::createMessage(const unsigned char *payload,
+mqtt::message_ptr MQTTDataStreamer::createMessage(const unsigned char *payload,
                                                    std::size_t len) {
   mqtt::message_ptr msg = mqtt::make_message(
       topic, reinterpret_cast<const void *>(payload), len, QoS, retain_msg);
   return (msg);
 }
 
-void MQTTDatatStreamer::publishMessage(const unsigned char *payload,
+void MQTTDataStreamer::publishMessage(const unsigned char *payload,
                                        std::size_t len,
                                        DeliveryActionListener listener) {
   mqtt::message_ptr msg = createMessage(payload, len);
