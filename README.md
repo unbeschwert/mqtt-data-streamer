@@ -26,3 +26,5 @@ cmake -DPahoMqttC_INCLUDE_DIRS="/path/to/include_dir" -DPahoMqttCpp_INCLUDE_DIRS
 make
 sudo make install
 ```
+## Issues and Pull Requests
+If you have any ideas about improvements or changes that might make this library better, please first create an issue so that we can discuss first. 
