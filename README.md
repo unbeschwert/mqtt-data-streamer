@@ -19,8 +19,8 @@ cmake -Bbuild -H. -DPAHO_BUILD_STATIC=ON \
 cmake --build build/ --target install
 
 // install 
-git clone https://github.com/unbeschwert/mqtt-datastreamer.git mqtt-datastreamer
-cd mqtt-datastreamer
+git clone https://github.com/unbeschwert/mqtt-data-streamer.git mqtt-data-streamer
+cd mqtt-data-streamer
 mkdir build && cd build
 cmake -DPahoMqttC_INCLUDE_DIRS="/path/to/include_dir" -DPahoMqttCpp_INCLUDE_DIRS="/path/to/include_dir" ..
 make
